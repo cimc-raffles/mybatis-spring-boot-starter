@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  cimc.raffles.mybatis.configurer.MybatisPlusConfig
