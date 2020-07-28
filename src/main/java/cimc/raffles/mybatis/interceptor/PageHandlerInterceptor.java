@@ -18,20 +18,20 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
-import com.baomidou.mybatisplus.core.toolkit.LambdaUtils;
-import com.baomidou.mybatisplus.core.toolkit.support.ColumnCache;
+import com.baomidou.mybatisplus.core.metadata.TableInfo;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import cimc.raffles.mybatis.annotation.PageableDefault;
 import cimc.raffles.mybatis.enumeration.Direction;
 import cimc.raffles.mybatis.pagination.Pageable;
+import cimc.raffles.mybatis.util.TableUtils;
 
 public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver {
 
 	private final String KEYWORD_PAGE = "page";
 	private final String KEYWORD_SIZE = "size";
 	private final String KEYWORD_SORT = "sort";
-	private final String KEYWORD_ALIAS = "as";
 
 	public PageHandlerInterceptor() {
 	}
@@ -122,29 +122,27 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 	private Map<String, String> getColumnPropertyMap(Class<?> clazz) {
 		Map<String, String> result = new HashMap<>();
 
-		Field[] fields = clazz.getDeclaredFields();
-		Map<String, ColumnCache> columnCacheMap = LambdaUtils.getColumnMap(clazz);
+		TableInfo tableInfo = TableInfoHelper.getTableInfo(clazz);
+		boolean isUnderCamel = null == tableInfo ? false : tableInfo.isUnderCamel();
 
+		Map<String, String> columnMap = TableUtils.getMappedColumProperties(tableInfo);
+
+		Field[] fields = clazz.getDeclaredFields();
 		Arrays.stream(fields).forEach(x -> {
 			String columnName = x.getName();
 
-			ColumnCache columnCache = columnCacheMap.get(columnName);
+			String columnMappedName = columnMap.get(columnName.toUpperCase());
 
-			if (null == columnCache)
-				columnCache = columnCacheMap.get(columnName.toUpperCase());
-
-			if (null == columnCache)
-				columnCache = columnCacheMap.get(columnName.toLowerCase());
-
-			if (null != columnCache) {
-				columnName = this.getColumn(columnCache);
-				if (!x.getName().equalsIgnoreCase(columnName))
-					result.put(x.getName(), columnName);
-			} else {
+			if (StringUtils.isEmpty(columnMappedName)) {
 				TableField tableFieldAnnotation = x.getAnnotation(TableField.class);
 				if (null != tableFieldAnnotation)
-					result.put(x.getName(), tableFieldAnnotation.value());
+					columnMappedName = tableFieldAnnotation.value();
+				else if (isUnderCamel)
+					columnMappedName = com.baomidou.mybatisplus.core.toolkit.StringUtils.camelToUnderline(columnName);
 			}
+
+			if (!StringUtils.isEmpty(columnMappedName))
+				result.put(columnName, columnMappedName);
 
 			// handle JsonProperty annotation column
 			JsonProperty jsonAnnotation = x.getAnnotation(JsonProperty.class);
@@ -159,16 +157,6 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 		});
 
 		return result;
-	}
-
-	private String getColumn(ColumnCache columnCache) {
-		String columnSelect = columnCache.getColumnSelect();
-		String column = columnCache.getColumn();
-		if (StringUtils.isEmpty(columnSelect))
-			return column;
-		String keyword = String.format(" %s ", KEYWORD_ALIAS.toUpperCase());
-		int index = columnSelect.toUpperCase().indexOf(keyword);
-		return 0 > index ? column : columnSelect.substring(index + keyword.length());
 	}
 
 	private void removeOrder(List<OrderItem> orders, Predicate<OrderItem> filter) {
