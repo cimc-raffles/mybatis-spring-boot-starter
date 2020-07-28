@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ResolvableType;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -106,7 +107,6 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 			model.addOrder(Arrays.stream(descs).map(x -> {
 				return OrderItem.desc(StringUtils.isEmpty(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
 			}).collect(Collectors.toList()));
-
 		}
 
 		if (hasAscs) {
@@ -123,26 +123,42 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 		Map<String, String> result = new HashMap<>();
 
 		TableInfo tableInfo = TableInfoHelper.getTableInfo(clazz);
-		boolean isUnderCamel = null == tableInfo ? false : tableInfo.isUnderCamel();
+		boolean hasTableInfo = null != tableInfo;
+		boolean isUnderCamel = false;
+		if (hasTableInfo)
+			isUnderCamel = tableInfo.isUnderCamel();
+		else {
+			// TODO:
+			List<TableInfo> tableInfos = TableInfoHelper.getTableInfos();
+			isUnderCamel = CollectionUtils.isEmpty(tableInfos) ? isUnderCamel : tableInfos.get(0).isUnderCamel();
+		}
 
-		Map<String, String> columnMap = TableUtils.getMappedColumProperties(tableInfo);
+		Map<String, String> columnMap = hasTableInfo ? TableUtils.getMappedColumProperties(tableInfo) : null;
 
 		Field[] fields = clazz.getDeclaredFields();
-		Arrays.stream(fields).forEach(x -> {
+		for (Field x : fields) {
 			String columnName = x.getName();
 
-			String columnMappedName = columnMap.get(columnName.toUpperCase());
+			if (!hasTableInfo) {
+				if (isUnderCamel)
+					result.put(columnName,
+							com.baomidou.mybatisplus.core.toolkit.StringUtils.camelToUnderline(columnName));
+			} else {
 
-			if (StringUtils.isEmpty(columnMappedName)) {
-				TableField tableFieldAnnotation = x.getAnnotation(TableField.class);
-				if (null != tableFieldAnnotation)
-					columnMappedName = tableFieldAnnotation.value();
-				else if (isUnderCamel)
-					columnMappedName = com.baomidou.mybatisplus.core.toolkit.StringUtils.camelToUnderline(columnName);
+				String columnMappedName = columnMap.get(columnName.toUpperCase());
+
+				if (StringUtils.isEmpty(columnMappedName)) {
+					TableField tableFieldAnnotation = x.getAnnotation(TableField.class);
+					if (null != tableFieldAnnotation)
+						columnMappedName = tableFieldAnnotation.value();
+					else if (isUnderCamel)
+						columnMappedName = com.baomidou.mybatisplus.core.toolkit.StringUtils
+								.camelToUnderline(columnName);
+				}
+
+				if (!StringUtils.isEmpty(columnMappedName))
+					result.put(columnName, columnMappedName);
 			}
-
-			if (!StringUtils.isEmpty(columnMappedName))
-				result.put(columnName, columnMappedName);
 
 			// handle JsonProperty annotation column
 			JsonProperty jsonAnnotation = x.getAnnotation(JsonProperty.class);
@@ -154,7 +170,8 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 				if (!StringUtils.isEmpty(jsonAnnotation.value()))
 					result.put(jsonAnnotation.value(), columnName);
 			}
-		});
+		}
+		;
 
 		return result;
 	}
