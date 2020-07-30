@@ -149,7 +149,7 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 
 				if (StringUtils.isEmpty(columnMappedName)) {
 					TableField tableFieldAnnotation = x.getAnnotation(TableField.class);
-					if (null != tableFieldAnnotation)
+					if (null != tableFieldAnnotation && !StringUtils.isEmpty(tableFieldAnnotation.value()))
 						columnMappedName = tableFieldAnnotation.value();
 					else if (isUnderCamel)
 						columnMappedName = com.baomidou.mybatisplus.core.toolkit.StringUtils
