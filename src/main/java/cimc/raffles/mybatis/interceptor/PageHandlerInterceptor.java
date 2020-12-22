@@ -1,7 +1,7 @@
 package cimc.raffles.mybatis.interceptor;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,30 +62,37 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 		if (null == sorts || sorts.length < 1)
 			return model;
 
-		Predicate<? super String> predicate = x -> StringUtils.trimAllWhitespace(x).toUpperCase()
-				.endsWith(String.format(",%s", Direction.DESC.name()));
+		List<String> descs = new ArrayList<String>();
+		List<String> ascs = new ArrayList<String>();
 
-		String[] descs = Arrays.stream(sorts).filter(predicate).map(x -> StringUtils.commaDelimitedListToStringArray(x))
-				.flatMap(Arrays::stream)
-				.filter(x -> !StringUtils.trimAllWhitespace(x).toUpperCase().endsWith(Direction.DESC.name()))
-				.toArray(String[]::new);
+		for (String x : sorts) {
+			x = x.trim();
+			if (!(x.toUpperCase().endsWith("," + Direction.DESC.name())
+					|| x.toUpperCase().endsWith("," + Direction.ASC.name())))
+				x += ",".concat(Direction.ASC.name());
+			String[] computedString = StringUtils.commaDelimitedListToStringArray(x.trim());
+			for (int y = 0; y < computedString.length; ++y) {
+				if (0 == y)
+					continue;
+				String currentString = computedString[y];
+				if (Direction.DESC.name().equalsIgnoreCase(currentString))
+					descs.add(computedString[y - 1]);
+				if (Direction.ASC.name().equalsIgnoreCase(currentString))
+					ascs.add(computedString[y - 1]);
+			}
+		}
 
-		String[] ascs = Arrays.stream(sorts).filter(predicate.negate())
-				.map(x -> StringUtils.commaDelimitedListToStringArray(x)).flatMap(Arrays::stream)
-				.filter(x -> !StringUtils.trimAllWhitespace(x).toUpperCase().endsWith(Direction.ASC.name()))
-				.toArray(String[]::new);
-
-		boolean hasDescs = null != descs && 0 < descs.length;
-		boolean hasAscs = null != ascs && 0 < ascs.length;
+		boolean hasDescs = !descs.isEmpty();
+		boolean hasAscs = !ascs.isEmpty();
 
 		if (!hasDescs && !hasAscs)
 			return model;
 
 		if (hasDescs)
-			model.addOrder(OrderItem.descs(descs));
+			model.addOrder(OrderItem.descs(descs.toArray(new String[descs.size()])));
 
 		if (hasAscs)
-			model.addOrder(OrderItem.ascs(ascs));
+			model.addOrder(OrderItem.ascs(ascs.toArray(new String[ascs.size()])));
 
 		ResolvableType[] resolvableTypes = ResolvableType.forMethodParameter(parameter).getGenerics();
 
@@ -104,14 +111,14 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 
 		if (hasDescs) {
 			this.removeOrder(model.getOrders(), item -> !item.isAsc());
-			model.addOrder(Arrays.stream(descs).map(x -> {
+			model.addOrder(descs.stream().map(x -> {
 				return OrderItem.desc(StringUtils.isEmpty(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
 			}).collect(Collectors.toList()));
 		}
 
 		if (hasAscs) {
 			this.removeOrder(model.getOrders(), OrderItem::isAsc);
-			model.addOrder(Arrays.stream(ascs).map(x -> {
+			model.addOrder(ascs.stream().map(x -> {
 				return OrderItem.asc(StringUtils.isEmpty(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
 			}).collect(Collectors.toList()));
 		}
