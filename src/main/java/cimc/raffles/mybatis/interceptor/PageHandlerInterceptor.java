@@ -56,8 +56,11 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 
 		Pageable<T> model = new Pageable<T>();
 
-		model.setCurrent(1L + (StringUtils.isEmpty(page) ? pageable.page() : Long.valueOf(page)));
-		model.setSize(StringUtils.isEmpty(size) ? pageable.size() : Long.valueOf(size));
+		model.setCurrent(1L + (StringUtils.hasText(page) ? Long.valueOf(page) : pageable.page()));
+		model.setSize(StringUtils.hasText(size) ? Long.valueOf(size) : pageable.size());
+
+		if (null == sorts || sorts.length < 1)
+			sorts = pageable.sort();
 
 		if (null == sorts || sorts.length < 1)
 			return model;
@@ -110,16 +113,16 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 			return model;
 
 		if (hasDescs) {
-			this.removeOrder(model.getOrders(), item -> !item.isAsc());
+			this.removeOrder(model.orders(), item -> !item.isAsc());
 			model.addOrder(descs.stream().map(x -> {
-				return OrderItem.desc(StringUtils.isEmpty(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
+				return OrderItem.desc(!StringUtils.hasText(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
 			}).collect(Collectors.toList()));
 		}
 
 		if (hasAscs) {
-			this.removeOrder(model.getOrders(), OrderItem::isAsc);
+			this.removeOrder(model.orders(), OrderItem::isAsc);
 			model.addOrder(ascs.stream().map(x -> {
-				return OrderItem.asc(StringUtils.isEmpty(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
+				return OrderItem.asc(!StringUtils.hasText(columnPropertyMap.get(x)) ? x : columnPropertyMap.get(x));
 			}).collect(Collectors.toList()));
 		}
 
@@ -154,16 +157,16 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 
 				String columnMappedName = columnMap.get(columnName.toUpperCase());
 
-				if (StringUtils.isEmpty(columnMappedName)) {
+				if (!StringUtils.hasText(columnMappedName)) {
 					TableField tableFieldAnnotation = x.getAnnotation(TableField.class);
-					if (null != tableFieldAnnotation && !StringUtils.isEmpty(tableFieldAnnotation.value()))
+					if (null != tableFieldAnnotation && StringUtils.hasText(tableFieldAnnotation.value()))
 						columnMappedName = tableFieldAnnotation.value();
 					else if (isUnderCamel)
 						columnMappedName = com.baomidou.mybatisplus.core.toolkit.StringUtils
 								.camelToUnderline(columnName);
 				}
 
-				if (!StringUtils.isEmpty(columnMappedName))
+				if (StringUtils.hasText(columnMappedName))
 					result.put(columnName, columnMappedName);
 			}
 
@@ -171,10 +174,10 @@ public class PageHandlerInterceptor<T> implements HandlerMethodArgumentResolver 
 			JsonProperty jsonAnnotation = x.getAnnotation(JsonProperty.class);
 
 			if (null != jsonAnnotation) {
-				if (!StringUtils.isEmpty(jsonAnnotation.defaultValue()))
+				if (StringUtils.hasText(jsonAnnotation.defaultValue()))
 					result.put(jsonAnnotation.defaultValue(), columnName);
 
-				if (!StringUtils.isEmpty(jsonAnnotation.value()))
+				if (StringUtils.hasText(jsonAnnotation.value()))
 					result.put(jsonAnnotation.value(), columnName);
 			}
 		}
